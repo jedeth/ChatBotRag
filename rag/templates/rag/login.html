@@ -1,0 +1,56 @@
+{% extends "rag/base.html" %}
+
+{% block title %}Connexion — Chatbot RAG{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card shadow">
+                <div class="card-body p-4">
+
+                    <!-- Icône + titre -->
+                    <div class="text-center mb-4">
+                        <i class="bi bi-chat-dots-fill" style="font-size: 3rem; color: var(--grad-start);"></i>
+                        <h4 class="mt-2">Connexion</h4>
+                        <p class="text-muted">Académie de Paris</p>
+                    </div>
+
+                    <!-- Erreurs globales -->
+                    {% if form.errors %}
+                    <div class="alert alert-danger">Identifiants incorrects.</div>
+                    {% endif %}
+
+                    <form method="post" class="django-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ next }}">
+
+                        <!-- Username -->
+                        <div class="mb-3">
+                            <label for="id_username" class="form-label">Nom d'utilisateur</label>
+                            <input type="text" name="username" id="id_username"
+                                   value="{{ form.username.value|default:'' }}"
+                                   autocomplete="username" required>
+                        </div>
+
+                        <!-- Password -->
+                        <div class="mb-3">
+                            <label for="id_password" class="form-label">Mot de passe</label>
+                            <input type="password" name="password" id="id_password"
+                                   autocomplete="current-password" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Connexion</button>
+                    </form>
+
+                    <hr>
+                    <div class="text-center">
+                        <small>Pas de compte ? <a href="{% url 'register' %}">Inscrivez-vous</a></small>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

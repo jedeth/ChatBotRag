@@ -1,0 +1,34 @@
+# ==============================================================================
+# Chatbot RAG - Dépendances Python
+# ==============================================================================
+
+# --- Framework web + serveur production ---
+Django==4.2.7
+gunicorn==21.2.0
+whitenoise==6.6.0
+
+# --- Base de données PostgreSQL + pgvector ---
+psycopg[binary]>=3.1
+pgvector>=0.4.0
+
+# --- Celery (file de tâches asynchrones) ---
+celery==5.3.4
+redis==5.0.1
+django-celery-results==2.6.0
+
+# --- SAML SSO (prêt à brancher, même brique que noScribe) ---
+djangosaml2==1.11.1
+pysaml2==7.5.4
+xmlsec>=1.0.0
+
+# --- Extraction de documents (porté depuis chatbot/) ---
+PyMuPDF>=1.23.8          # PDF
+python-docx>=1.1.0       # DOCX
+openpyxl>=3.1.2          # XLSX
+langchain-text-splitters>=0.0.1  # Découpage en chunks
+
+# --- Client HTTP (appels API Albert) ---
+httpx>=0.25.2
+
+# --- Environnement ---
+python-dotenv==1.0.0
