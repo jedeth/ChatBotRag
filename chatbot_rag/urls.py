@@ -6,6 +6,10 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('rag.urls')),
+
+    # URLs SAML (djangosaml2) - Prêt à utiliser une fois SAML configuré
+    # Décommenter après configuration dans settings.py
+    # path('saml2/', include('djangosaml2.urls')),
 ]
 
 # Servir les fichiers media en développement
