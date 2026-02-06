@@ -24,8 +24,10 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 # Origines de confiance pour les requêtes CSRF (nécessaire pour Nginx)
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8182',
+    'http://localhost:8183',
     'http://localhost:8002',
     'http://127.0.0.1:8182',
+    'http://127.0.0.1:8183',
     'http://127.0.0.1:8002',
 ]
 
