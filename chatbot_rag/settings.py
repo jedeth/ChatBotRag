@@ -101,6 +101,16 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'chat'
 LOGOUT_REDIRECT_URL = 'login'
 
+# ==============================================================================
+# Configuration des cookies de session (Partagée avec Portail IA)
+# ==============================================================================
+SESSION_COOKIE_NAME = 'portal_sessionid'  # ⚠️ Même nom que le portail
+SESSION_COOKIE_DOMAIN = '.in.ac-paris.fr'  # Partagé entre apps
+SESSION_COOKIE_PATH = '/chatbot-rag/'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG  # True en production (HTTPS)
+
 # SAML — désactivé par défaut, activable via .env pour brancher l'IdP AC-Paris
 SAML_ENABLED = os.getenv('SAML_ENABLED', 'False') == 'True'
 
@@ -125,15 +135,20 @@ ALBERT_EMBEDDING_MODEL = os.getenv('ALBERT_EMBEDDING_MODEL', 'BAAI/bge-m3')
 ALBERT_CHAT_MODEL = os.getenv('ALBERT_CHAT_MODEL', 'albert-large')
 
 # ==============================================================================
+# Configuration pour sous-chemin /chatbot-rag/ (Portail IA)
+# ==============================================================================
+FORCE_SCRIPT_NAME = '/chatbot-rag'
+
+# ==============================================================================
 # Fichiers — upload et statiques
 # ==============================================================================
-MEDIA_URL = '/media/'
+MEDIA_URL = '/chatbot-rag/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Taille max d'un fichier uploadé (100 Mo par défaut)
 MAX_UPLOAD_SIZE = int(os.getenv('MAX_UPLOAD_SIZE', 104857600))
 
-STATIC_URL = '/static/'
+STATIC_URL = '/chatbot-rag/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
     "staticfiles": {
