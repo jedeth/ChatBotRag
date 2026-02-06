@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'rag.middleware.SharedAuthMiddleware',  # Auto-crée les utilisateurs depuis la session partagée
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -97,16 +98,17 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-LOGIN_URL = 'login'
+LOGIN_URL = '/'  # Redirige vers le portail principal
 LOGIN_REDIRECT_URL = 'chat'
 LOGOUT_REDIRECT_URL = 'login'
 
 # ==============================================================================
 # Configuration des cookies de session (Partagée avec Portail IA)
 # ==============================================================================
+SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 SESSION_COOKIE_NAME = 'portal_sessionid'  # ⚠️ Même nom que le portail
 SESSION_COOKIE_DOMAIN = '.in.ac-paris.fr'  # Partagé entre apps
-SESSION_COOKIE_PATH = '/chatbot-rag/'
+SESSION_COOKIE_PATH = '/'  # Même chemin que le portail pour partager la session
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG  # True en production (HTTPS)
