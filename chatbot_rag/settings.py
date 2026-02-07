@@ -143,6 +143,19 @@ ALBERT_EMBEDDING_MODEL = os.getenv('ALBERT_EMBEDDING_MODEL', 'BAAI/bge-m3')
 ALBERT_CHAT_MODEL = os.getenv('ALBERT_CHAT_MODEL', 'albert-large')
 
 # ==============================================================================
+# RAG — Recherche sémantique et re-ranking
+# ==============================================================================
+
+# Seuil de distance cosinus pour la recherche vectorielle (0 = identique, 1 = orthogonal)
+# Valeurs recommandées : 0.6-0.8 (plus bas = plus permissif, plus de résultats)
+RAG_SIMILARITY_THRESHOLD = float(os.getenv('RAG_SIMILARITY_THRESHOLD', '0.7'))
+
+# Re-ranking avec bge-reranker-v2-m3 (améliore la pertinence des résultats)
+RAG_ENABLE_RERANKING = os.getenv('RAG_ENABLE_RERANKING', 'True') == 'True'
+RAG_INITIAL_TOP_K = int(os.getenv('RAG_INITIAL_TOP_K', '20'))  # Chunks avant re-ranking
+RAG_FINAL_TOP_K = int(os.getenv('RAG_FINAL_TOP_K', '5'))       # Chunks après re-ranking
+
+# ==============================================================================
 # Configuration pour sous-chemin /chatbot-rag/ (Portail IA)
 # ==============================================================================
 FORCE_SCRIPT_NAME = '/chatbot-rag'

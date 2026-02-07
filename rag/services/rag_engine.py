@@ -17,6 +17,7 @@ import logging
 from typing import List, Dict
 
 from django.contrib.auth.models import User
+from django.conf import settings
 from pgvector.django import CosineDistance
 
 from .albert_client import AlbertClient
@@ -24,15 +25,11 @@ from ..models import Document, DocumentChunk
 
 logger = logging.getLogger('rag')
 
-# Paramètres de recherche vectorielle
-SIMILARITY_THRESHOLD = 0.8  # Seuil de distance cosinus (0 = identique, 1 = orthogonal)
-
-# Paramètres de re-ranking (si activé)
-ENABLE_RERANKING = True    # Active le re-ranking avec bge-reranker-v2-m3
-INITIAL_TOP_K = 20         # Nombre de chunks récupérés avant re-ranking
-FINAL_TOP_K = 5            # Nombre de chunks finaux après re-ranking
-
-# Si re-ranking désactivé, récupère directement FINAL_TOP_K chunks
+# Paramètres de recherche vectorielle (depuis settings.py)
+SIMILARITY_THRESHOLD = settings.RAG_SIMILARITY_THRESHOLD
+ENABLE_RERANKING = settings.RAG_ENABLE_RERANKING
+INITIAL_TOP_K = settings.RAG_INITIAL_TOP_K
+FINAL_TOP_K = settings.RAG_FINAL_TOP_K
 TOP_K = FINAL_TOP_K
 
 
@@ -343,30 +340,60 @@ class RAGEngine:
 
     def _extract_sources(self, context_chunks: List[Dict]) -> List[Dict]:
         """
-        Déduplique les sources par nom de fichier.
+        Déduplique les sources par nom de fichier et agrège les scores.
 
-        Pour chaque document, garde le meilleur score de pertinence
-        et l'extrait correspondant.  Porté tel quel depuis chatbot/.
+        Pour chaque document :
+        - Calcule un score agrégé (moyenne des chunks ou score de re-ranking)
+        - Conserve l'extrait du chunk le plus pertinent
+        - Compte le nombre de chunks utilisés par document
+
+        Le score agrégé permet de privilégier les documents qui apparaissent
+        plusieurs fois dans le top-k, indiquant une forte pertinence globale.
         """
         sources_by_doc: Dict[str, Dict] = {}
 
         for chunk in context_chunks:
-            doc_name  = chunk['source']
-            relevance = 1.0 - chunk['distance']
+            doc_name = chunk['source']
+
+            # Utiliser le score de re-ranking si disponible, sinon calculer depuis distance
+            if 'rerank_score' in chunk:
+                relevance = chunk['rerank_score']
+            else:
+                relevance = 1.0 - chunk['distance']
 
             if doc_name not in sources_by_doc:
                 sources_by_doc[doc_name] = {
-                    'document':    doc_name,
-                    'excerpt':     chunk['content'][:200] + '…',
-                    'relevance':   relevance,
+                    'document': doc_name,
+                    'excerpt': chunk['content'][:200] + '…',
+                    'relevance': relevance,
                     'chunks_count': 1,
+                    'total_relevance': relevance,  # Pour calcul de moyenne
+                    'best_relevance': relevance,   # Meilleur score individuel
                 }
             else:
                 existing = sources_by_doc[doc_name]
                 existing['chunks_count'] += 1
-                if relevance > existing['relevance']:
-                    existing['relevance'] = relevance
-                    existing['excerpt']   = chunk['content'][:200] + '…'
+                existing['total_relevance'] += relevance
 
-        # Trier par pertinence décroissante
-        return sorted(sources_by_doc.values(), key=lambda s: s['relevance'], reverse=True)
+                # Garder l'extrait du chunk le plus pertinent
+                if relevance > existing['best_relevance']:
+                    existing['best_relevance'] = relevance
+                    existing['excerpt'] = chunk['content'][:200] + '…'
+
+                # Score agrégé = moyenne pondérée (favorise docs avec plusieurs chunks pertinents)
+                # Utilise moyenne * (1 + 0.1 * nombre de chunks) pour récompenser la récurrence
+                avg_relevance = existing['total_relevance'] / existing['chunks_count']
+                recurrence_bonus = 1.0 + (0.1 * (existing['chunks_count'] - 1))
+                existing['relevance'] = avg_relevance * min(recurrence_bonus, 1.5)  # Cap à +50%
+
+        # Nettoyer les champs temporaires et trier par pertinence
+        final_sources = []
+        for source in sources_by_doc.values():
+            final_sources.append({
+                'document': source['document'],
+                'excerpt': source['excerpt'],
+                'relevance': source['relevance'],
+                'chunks_count': source['chunks_count']
+            })
+
+        return sorted(final_sources, key=lambda s: s['relevance'], reverse=True)
