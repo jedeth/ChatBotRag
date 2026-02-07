@@ -178,12 +178,19 @@ def chat_send_view(request):
     POST body :
       message        — texte de la question
       conversation_id — ID de conversation existante (optionnel)
+      skip_coaching  — True pour désactiver le Query Coach (optionnel)
 
     Retourne JSON :
-      {"response": "…", "sources": […], "conversation_id": <int>}
+      {
+        "response": "…",
+        "sources": […],
+        "conversation_id": <int>,
+        "coaching": {...}  (optionnel, si suggestions disponibles)
+      }
     """
     message_text = request.POST.get('message', '').strip()
     conversation_id = request.POST.get('conversation_id', '').strip()
+    skip_coaching = request.POST.get('skip_coaching', 'false').lower() == 'true'
 
     if not message_text:
         return JsonResponse({'error': 'Message vide'}, status=400)
@@ -212,6 +219,7 @@ def chat_send_view(request):
         result = rag.generate_response(
             user=request.user,
             message=message_text,
+            skip_coaching=skip_coaching,
         )
 
         # Sauvegarder la réponse assistant
@@ -227,11 +235,18 @@ def chat_send_view(request):
             conversation.title = message_text[:100]
             conversation.save()
 
-        return JsonResponse({
+        # Construire la réponse JSON
+        response_data = {
             'response':        result['response'],
             'sources':         result['sources'],
             'conversation_id': conversation.id,
-        })
+        }
+
+        # Ajouter les suggestions de coaching si disponibles
+        if 'coaching' in result and result['coaching']:
+            response_data['coaching'] = result['coaching']
+
+        return JsonResponse(response_data)
 
     except Exception as e:
         logger.error(f"Erreur chat pour {request.user.username} : {e}", exc_info=True)

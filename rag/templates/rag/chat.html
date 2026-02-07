@@ -121,6 +121,140 @@
     }
     .msg-sources strong { color: #475569; }
 
+    /* --- Coaching suggestions --- */
+    .coaching-card {
+        background: #e0f2fe;
+        border: 1px solid #7dd3fc;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        max-width: 78%;
+    }
+    .coaching-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+    }
+    .coaching-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+        color: #0c4a6e;
+        font-size: 0.95rem;
+    }
+    .coaching-level-badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 12px;
+        background: #bae6fd;
+        color: #0c4a6e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .btn-skip-coaching {
+        background: transparent;
+        border: 1px solid #7dd3fc;
+        color: #0369a1;
+        padding: 0.25rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all .2s;
+    }
+    .btn-skip-coaching:hover {
+        background: #7dd3fc;
+        color: #fff;
+    }
+    .coaching-content {
+        color: #0c4a6e;
+        font-size: 0.88rem;
+        line-height: 1.6;
+    }
+    .coaching-suggestions {
+        margin-top: 0.5rem;
+        padding-left: 1.2rem;
+    }
+    .coaching-suggestions li {
+        margin-bottom: 0.3rem;
+    }
+    .coaching-questions {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        background: #f0f9ff;
+        border-radius: 8px;
+        border-left: 3px solid #0ea5e9;
+    }
+    .coaching-questions strong {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-size: 0.85rem;
+    }
+    .coaching-questions ul {
+        margin: 0;
+        padding-left: 1.2rem;
+    }
+
+    /* --- Sources expandable --- */
+    .sources-accordion {
+        margin-top: 0.5rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #f8fafc;
+    }
+    .sources-header {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        color: #475569;
+        transition: background .2s;
+    }
+    .sources-header:hover {
+        background: #f1f5f9;
+    }
+    .sources-header i {
+        transition: transform .2s;
+    }
+    .sources-header.expanded i {
+        transform: rotate(180deg);
+    }
+    .sources-content {
+        padding: 0.75rem;
+        border-top: 1px solid #e2e8f0;
+        display: none;
+        font-size: 0.8rem;
+    }
+    .sources-content.show {
+        display: block;
+    }
+    .source-item {
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .source-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    .source-name {
+        font-weight: 600;
+        color: #334155;
+    }
+    .source-relevance {
+        color: #0ea5e9;
+        font-size: 0.75rem;
+    }
+    .source-excerpt {
+        color: #64748b;
+        margin-top: 0.25rem;
+        font-style: italic;
+    }
+
     /* --- Zone d'entrée --- */
     .chat-input-area {
         padding: 1rem 1.5rem;
@@ -285,6 +419,9 @@
 // ID de la conversation active (null = nouvelle)
 let currentConvId = {% if current_conversation %}{{ current_conversation.id }}{% else %}null{% endif %};
 
+// Mode skip coaching (activé par le bouton Skip)
+let skipCoaching = false;
+
 // Token CSRF depuis le cookie (nécessaire pour les requêtes POST AJAX)
 function getCsrf() {
     const m = document.cookie.match(/csrftoken=([^;]+)/);
@@ -323,6 +460,7 @@ async function sendMessage() {
             body: new URLSearchParams({
                 message:         text,
                 conversation_id: currentConvId || '',
+                skip_coaching:   skipCoaching.toString(),
             }),
         });
 
@@ -333,8 +471,16 @@ async function sendMessage() {
             return;
         }
 
-        // Remplacer l'indicateur par la réponse + sources
-        replaceMessage(loadingId, data.response, data.sources);
+        // Supprimer l'indicateur de chargement
+        document.getElementById(loadingId)?.remove();
+
+        // Afficher les suggestions de coaching si disponibles
+        if (data.coaching && !skipCoaching) {
+            appendCoaching(data.coaching);
+        }
+
+        // Afficher la réponse + sources
+        appendMessage('assistant', data.response, data.sources);
 
         // Mémoriser l'ID de conversation
         if (data.conversation_id) currentConvId = data.conversation_id;
@@ -347,33 +493,126 @@ async function sendMessage() {
 // ---------------------------------------------------------------
 // Manipulation du DOM — messages
 // ---------------------------------------------------------------
-function appendMessage(role, html) {
+function appendMessage(role, content, sources) {
     const id = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
     const div = document.createElement('div');
     div.id  = id;
     div.className = 'msg ' + role;
-    div.innerHTML = '<div class="msg-bubble">' + html + '</div>';
+
+    // Contenu du message
+    let html = '<div class="msg-bubble">' + escapeHtml(content) + '</div>';
+
+    // Ajouter les sources si présentes
+    if (sources && sources.length > 0 && role === 'assistant') {
+        html += buildSourcesAccordion(sources);
+    }
+
+    div.innerHTML = html;
     document.getElementById('chat-messages').appendChild(div);
     div.scrollIntoView({ behavior: 'smooth' });
     return id;
+}
+
+function appendCoaching(coaching) {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'coaching-card';
+
+    let html = '<div class="coaching-header">';
+    html += '<div class="coaching-title">';
+    html += '<i class="bi bi-lightbulb" style="color:#0ea5e9;"></i>';
+    html += '<span>💡 Suggestions pour améliorer votre question</span>';
+    if (coaching.level) {
+        html += '<span class="coaching-level-badge">' + coaching.level + '</span>';
+    }
+    html += '</div>';
+    html += '<button class="btn-skip-coaching" onclick="enableSkipCoaching()">Ignorer les suggestions</button>';
+    html += '</div>';
+
+    html += '<div class="coaching-content">';
+
+    // Suggestions
+    if (coaching.suggestions && coaching.suggestions.length > 0) {
+        html += '<ul class="coaching-suggestions">';
+        coaching.suggestions.forEach(function(suggestion) {
+            html += '<li>' + escapeHtml(suggestion) + '</li>';
+        });
+        html += '</ul>';
+    }
+
+    // Questions de clarification
+    if (coaching.clarification_questions && coaching.clarification_questions.length > 0) {
+        html += '<div class="coaching-questions">';
+        html += '<strong><i class="bi bi-question-circle"></i> Questions de clarification :</strong>';
+        html += '<ul>';
+        coaching.clarification_questions.forEach(function(question) {
+            html += '<li>' + escapeHtml(question) + '</li>';
+        });
+        html += '</ul>';
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    div.innerHTML = html;
+    container.appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth' });
+}
+
+function buildSourcesAccordion(sources) {
+    const accordionId = 'sources-' + Date.now();
+    let html = '<div class="sources-accordion">';
+    html += '<div class="sources-header" onclick="toggleSources(\'' + accordionId + '\')">';
+    html += '<strong><i class="bi bi-book"></i> ' + sources.length + ' source(s)</strong>';
+    html += '<i class="bi bi-chevron-down"></i>';
+    html += '</div>';
+    html += '<div class="sources-content" id="' + accordionId + '">';
+
+    sources.forEach(function(src) {
+        html += '<div class="source-item">';
+        html += '<div class="source-name"><i class="bi bi-file-text"></i> ' + escapeHtml(src.document) + '</div>';
+        if (src.relevance !== undefined) {
+            html += '<div class="source-relevance">Pertinence: ' + (src.relevance * 100).toFixed(0) + '%';
+            if (src.chunks_count > 1) {
+                html += ' (' + src.chunks_count + ' extraits)';
+            }
+            html += '</div>';
+        }
+        if (src.excerpt) {
+            html += '<div class="source-excerpt">' + escapeHtml(src.excerpt) + '</div>';
+        }
+        html += '</div>';
+    });
+
+    html += '</div>';
+    html += '</div>';
+    return html;
+}
+
+function toggleSources(id) {
+    const content = document.getElementById(id);
+    const header = content.previousElementSibling;
+    content.classList.toggle('show');
+    header.classList.toggle('expanded');
+}
+
+function enableSkipCoaching() {
+    skipCoaching = true;
+    alert('✓ Suggestions désactivées pour cette conversation');
 }
 
 function replaceMessage(id, content, sources) {
     const el = document.getElementById(id);
     if (!el) return;
 
-    // Échapper le contenu pour éviter XSS (le contenu vient du LLM)
-    let html = escapeHtml(content);
+    // Remplacer le contenu du message
+    el.querySelector('.msg-bubble').innerHTML = escapeHtml(content);
 
     // Ajouter les sources si présentes
     if (sources && sources.length > 0) {
-        html += '<div class="msg-sources" style="margin-top:.4rem; font-size:.8rem; color:#64748b;">'
-              + '<strong>Sources :</strong> '
-              + sources.map(s => escapeHtml(s.document)).join(', ')
-              + '</div>';
+        const sourcesHtml = buildSourcesAccordion(sources);
+        el.innerHTML += sourcesHtml;
     }
-
-    el.querySelector('.msg-bubble').innerHTML = html;
 }
 
 function escapeHtml(str) {
