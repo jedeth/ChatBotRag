@@ -20,6 +20,7 @@ import fitz  # PyMuPDF
 import pdfplumber  # Extraction de tableaux PDF
 from docx import Document as DocxDocument
 import openpyxl
+import tiktoken
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger('rag')
@@ -29,14 +30,38 @@ class VectorizationService:
     """Extraction et découpage de texte depuis des documents uploadés."""
 
     def __init__(self):
+        # Tokenizer pour comptage précis (cl100k_base = GPT-4/embeddings modernes)
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")
+
+        # Chunking basé sur tokens (512 tokens ≈ optimal pour BGE-M3)
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len,
-            separators=["\n\n", "\n", ". ", " ", ""],
+            chunk_size=512,  # tokens (vs 1000 chars avant)
+            chunk_overlap=100,  # tokens (vs 200 chars avant)
+            length_function=self._count_tokens,  # Utilise tiktoken
+            separators=[
+                "\n\n=== TABLEAU",  # Préserver les tableaux ensemble
+                "\n\n--- Page",     # Préserver les pages ensemble si possible
+                "\n\n",             # Paragraphes
+                "\n",               # Lignes
+                ". ",               # Phrases
+                " ",                # Mots
+                ""
+            ],
         )
         # Métadonnées extraites lors de l'extraction (pour stocker dans Document.metadata)
         self.extracted_metadata = {}
+
+    def _count_tokens(self, text: str) -> int:
+        """
+        Compte le nombre de tokens dans un texte avec tiktoken.
+
+        Args:
+            text: Texte à analyser
+
+        Returns:
+            Nombre de tokens
+        """
+        return len(self.tokenizer.encode(text))
 
     # ------------------------------------------------------------------
     # Extraction de texte selon le format
@@ -357,6 +382,9 @@ class VectorizationService:
         """
         Découpe un texte en chunks avec métadonnées complètes.
 
+        Utilise un chunking basé sur tokens (512 tokens par chunk, 100 tokens d'overlap)
+        pour une meilleure compatibilité avec les modèles d'embeddings (BGE-M3).
+
         Filtre les chunks trop courts (pages vides, headers seuls, etc.)
         pour éviter de polluer la base vectorielle.
 
@@ -373,7 +401,8 @@ class VectorizationService:
                         "source": "filename.pdf",
                         "chunk_index": 0,
                         "original_index": 0,
-                        "char_count": 950
+                        "char_count": 950,
+                        "token_count": 245
                     }
                 },
                 ...
@@ -384,16 +413,21 @@ class VectorizationService:
         # Filtrer les chunks trop courts en conservant les métadonnées
         filtered_chunks = []
         original_index = 0
+        total_tokens = 0
 
         for chunk in raw_chunks:
             if len(chunk.strip()) >= min_chunk_size:
+                token_count = self._count_tokens(chunk)
+                total_tokens += token_count
+
                 filtered_chunks.append({
                     "content": chunk,
                     "metadata": {
                         "source": filename,
                         "chunk_index": len(filtered_chunks),
                         "original_index": original_index,
-                        "char_count": len(chunk)
+                        "char_count": len(chunk),
+                        "token_count": token_count  # Nouveau: compte de tokens
                     }
                 })
             original_index += 1
@@ -402,6 +436,15 @@ class VectorizationService:
             logger.info(
                 f"Filtré {len(raw_chunks) - len(filtered_chunks)} chunks vides "
                 f"({len(filtered_chunks)} chunks conservés)"
+            )
+
+        # Statistiques de chunking
+        if filtered_chunks:
+            avg_tokens = total_tokens / len(filtered_chunks)
+            logger.info(
+                f"Chunking: {len(filtered_chunks)} chunks, "
+                f"moyenne {avg_tokens:.0f} tokens/chunk, "
+                f"total {total_tokens} tokens"
             )
 
         return filtered_chunks
