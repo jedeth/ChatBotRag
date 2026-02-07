@@ -184,9 +184,99 @@ class VectorizationService:
         return "\n".join(formatted_rows)
 
     def _extract_docx(self, file_path: str) -> str:
-        """DOCX → texte paragraphe par paragraphe."""
+        """
+        DOCX → texte avec tableaux (python-docx).
+
+        Extrait les paragraphes ET les tableaux dans l'ordre d'apparition.
+        Préserve la structure hiérarchique du document.
+        """
         doc = DocxDocument(file_path)
-        return "\n\n".join(para.text for para in doc.paragraphs)
+        content_parts = []
+        table_count = 0
+
+        # Parcourir tous les éléments du document dans l'ordre
+        # Note: doc.element.body permet d'accéder aux éléments dans l'ordre
+        for element in doc.element.body:
+            # Paragraphe
+            if element.tag.endswith('p'):
+                # Trouver le paragraphe correspondant
+                for para in doc.paragraphs:
+                    if para._element == element:
+                        text = para.text.strip()
+                        if text:  # Ignorer les paragraphes vides
+                            content_parts.append(text)
+                        break
+
+            # Tableau
+            elif element.tag.endswith('tbl'):
+                # Trouver le tableau correspondant
+                for table in doc.tables:
+                    if table._element == element:
+                        table_count += 1
+                        content_parts.append(
+                            f"\n\n=== TABLEAU {table_count} ===\n"
+                        )
+                        content_parts.append(self._format_docx_table(table))
+                        content_parts.append("\n=== FIN TABLEAU ===\n\n")
+                        break
+
+        # Stocker les métadonnées DOCX
+        self.extracted_metadata.update({
+            'paragraph_count': len(doc.paragraphs),
+            'has_tables': table_count > 0,
+            'table_count': table_count
+        })
+        logger.info(
+            f"DOCX metadata: {len(doc.paragraphs)} paragraphe(s), "
+            f"{table_count} tableau(x)"
+        )
+
+        return "\n\n".join(content_parts)
+
+    def _format_docx_table(self, table) -> str:
+        """
+        Formate un tableau DOCX en texte lisible.
+
+        Args:
+            table: Objet Table de python-docx
+
+        Returns:
+            Tableau formaté en texte avec séparateurs
+        """
+        rows_data = []
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells]
+            rows_data.append(cells)
+
+        if not rows_data:
+            return "(Tableau vide)"
+
+        # Calculer la largeur de chaque colonne
+        num_cols = max(len(row) for row in rows_data) if rows_data else 0
+        col_widths = []
+        for col_idx in range(num_cols):
+            max_width = max(
+                len(row[col_idx]) if col_idx < len(row) else 0
+                for row in rows_data
+            )
+            col_widths.append(min(max_width, 40))  # Max 40 chars
+
+        # Formater chaque ligne
+        formatted_rows = []
+        for row_idx, row in enumerate(rows_data):
+            formatted_cells = []
+            for col_idx, cell in enumerate(row):
+                width = col_widths[col_idx] if col_idx < len(col_widths) else 20
+                cell_text = cell[:width].ljust(width)
+                formatted_cells.append(cell_text)
+            formatted_rows.append(" | ".join(formatted_cells))
+
+            # Séparateur après l'en-tête
+            if row_idx == 0 and len(rows_data) > 1:
+                separator = "-+-".join(["-" * w for w in col_widths[:len(row)]])
+                formatted_rows.append(separator)
+
+        return "\n".join(formatted_rows)
 
     def _extract_xlsx(self, file_path: str) -> str:
         """XLSX → texte avec noms de feuilles et métadonnées statistiques."""
