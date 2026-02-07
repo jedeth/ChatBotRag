@@ -31,6 +31,12 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8002',
 ]
 
+# Ajouter des origines supplémentaires depuis la variable d'environnement
+# Format: liste séparée par des virgules (ex: "https://example.com,https://other.com")
+additional_origins = os.getenv('CSRF_TRUSTED_ORIGINS_EXTRA', '')
+if additional_origins:
+    CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in additional_origins.split(',')])
+
 # ==============================================================================
 # Applications
 # ==============================================================================

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portail Académie de Paris - Applications IA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .portal-container {
+            padding: 3rem 1rem;
+        }
+        .portal-header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+        .portal-header h1 {
+            font-size: 2.8rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .portal-header p {
+            font-size: 1.3rem;
+            opacity: 0.95;
+        }
+        .portal-subtitle {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 3rem;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 1s ease-out;
+        }
+        .portal-subtitle h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .user-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 1.2rem;
+            margin-bottom: 3rem;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 1s ease-out 0.2s backwards;
+        }
+        .user-info strong {
+            font-size: 1.1rem;
+        }
+        .app-card {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            border-radius: 20px;
+            overflow: hidden;
+            height: 100%;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            animation: fadeInUp 0.8s ease-out backwards;
+        }
+        .app-card:nth-child(1) { animation-delay: 0.2s; }
+        .app-card:nth-child(2) { animation-delay: 0.4s; }
+
+        .app-card:hover {
+            transform: translateY(-15px) scale(1.02);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+        }
+        .app-card-header {
+            padding: 3rem 2rem;
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .app-card-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(45deg);
+            transition: all 0.5s;
+        }
+        .app-card:hover .app-card-header::before {
+            left: 100%;
+        }
+        .app-card-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 1;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .app-card-body {
+            padding: 2rem;
+            background: white;
+        }
+        .app-card-title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+        .app-card-description {
+            color: #6c757d;
+            margin-bottom: 1.5rem;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 1.5rem;
+        }
+        .feature-list li {
+            padding: 0.5rem 0;
+            color: #495057;
+        }
+        .feature-list li i {
+            color: #28a745;
+            margin-right: 0.5rem;
+        }
+        .app-card-footer {
+            padding: 1.5rem 2rem;
+            background: #f8f9fa;
+            border-top: 2px solid #e9ecef;
+        }
+        .btn-access {
+            font-size: 1.1rem;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-access::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        .btn-access:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        .bg-primary-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .bg-success-gradient {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .footer-info {
+            text-align: center;
+            margin-top: 4rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            color: white;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 1s ease-out 0.6s backwards;
+        }
+        .footer-info i {
+            font-size: 1.3rem;
+            margin: 0 0.5rem;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body>
+    <div class="portal-container">
+        <div class="container">
+            <!-- En-tête du portail -->
+            <div class="portal-header">
+                <h1><i class="bi bi-stars"></i> Portail IA - Académie de Paris</h1>
+                <p>Vos applications d'Intelligence Artificielle</p>
+            </div>
+
+            <!-- Sous-titre informatif -->
+            <div class="portal-subtitle">
+                <h3><i class="bi bi-shield-check"></i> Authentification unique via SAML</h3>
+                <p class="mb-0">Connectez-vous une seule fois pour accéder à toutes vos applications IA</p>
+            </div>
+
+            <!-- Informations utilisateur -->
+            <div class="user-info">
+                <i class="bi bi-person-circle" style="font-size: 2.5rem; margin-right: 1rem;"></i>
+                <strong>Bienvenue, Jean Dupont</strong>
+                <span class="ms-3"><i class="bi bi-envelope"></i> jean.dupont@ac-paris.fr</span>
+                <a href="#" class="btn btn-sm btn-outline-light ms-4">
+                    <i class="bi bi-box-arrow-right"></i> Déconnexion
+                </a>
+            </div>
+
+            <!-- Grille des applications -->
+            <div class="row g-5 justify-content-center">
+                <!-- Application 1 : noScribe Portal -->
+                <div class="col-lg-6 col-md-6">
+                    <div class="card app-card">
+                        <div class="app-card-header bg-primary-gradient">
+                            <div class="app-card-icon">
+                                <i class="bi bi-mic-fill"></i>
+                            </div>
+                            <h4 style="position: relative; z-index: 1; margin: 0;">Transcription Audio IA</h4>
+                        </div>
+                        <div class="app-card-body">
+                            <h5 class="app-card-title">
+                                <i class="bi bi-mic-fill text-primary"></i> noScribe Portal
+                            </h5>
+                            <p class="app-card-description">
+                                Plateforme complète de transcription automatique d'audio et de génération intelligente de comptes rendus via l'API Aristote LLM
+                            </p>
+
+                            <ul class="feature-list">
+                                <li><i class="bi bi-check-circle-fill"></i> Transcription audio automatique (CPU ou GPU)</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Diarisation des locuteurs (qui parle quand)</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Génération de comptes rendus avec IA</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Mode hybride : local ou API Albert GPU</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Export HTML, DOCX, PDF</li>
+                            </ul>
+
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="status-badge bg-success text-white">
+                                    <i class="bi bi-check-circle-fill"></i> Opérationnel
+                                </span>
+                                <small class="text-muted">
+                                    <i class="bi bi-clock"></i> Dernière utilisation : Aujourd'hui
+                                </small>
+                            </div>
+                        </div>
+                        <div class="app-card-footer">
+                            <a href="https://noscribe.in.ac-paris.fr/mes-transcriptions/" class="btn btn-primary btn-access w-100">
+                                <i class="bi bi-arrow-right-circle"></i> Accéder à noScribe Portal
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Application 2 : Chatbot DRASI -->
+                <div class="col-lg-6 col-md-6">
+                    <div class="card app-card">
+                        <div class="app-card-header bg-success-gradient">
+                            <div class="app-card-icon">
+                                <i class="bi bi-robot"></i>
+                            </div>
+                            <h4 style="position: relative; z-index: 1; margin: 0;">Assistant RAG Intelligent</h4>
+                        </div>
+                        <div class="app-card-body">
+                            <h5 class="app-card-title">
+                                <i class="bi bi-robot text-success"></i> Chatbot DRASI
+                            </h5>
+                            <p class="app-card-description">
+                                Assistant conversationnel intelligent avec Retrieval-Augmented Generation (RAG) pour interroger vos documents avec des LLMs souverains
+                            </p>
+
+                            <ul class="feature-list">
+                                <li><i class="bi bi-check-circle-fill"></i> Import de documents (PDF, DOCX)</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Recherche sémantique intelligente (ChromaDB)</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Chat contextuel avec historique</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Embeddings locaux (Ollama, Sentence-Transformers)</li>
+                                <li><i class="bi bi-check-circle-fill"></i> Anti-hallucination (réponses basées sur documents)</li>
+                            </ul>
+
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="status-badge bg-success text-white">
+                                    <i class="bi bi-check-circle-fill"></i> Opérationnel
+                                </span>
+                                <small class="text-muted">
+                                    <i class="bi bi-clock"></i> Dernière utilisation : Aujourd'hui
+                                </small>
+                            </div>
+                        </div>
+                        <div class="app-card-footer">
+                            <a href="https://chatbot-drasi.in.ac-paris.fr/" class="btn btn-success btn-access w-100">
+                                <i class="bi bi-arrow-right-circle"></i> Accéder au Chatbot DRASI
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer informatif -->
+            <div class="footer-info">
+                <div class="row align-items-center">
+                    <div class="col-md-4 mb-3 mb-md-0">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        <strong>Authentification SAML</strong><br>
+                        <small>Via IdP Académie de Paris</small>
+                    </div>
+                    <div class="col-md-4 mb-3 mb-md-0">
+                        <i class="bi bi-key-fill"></i>
+                        <strong>Single Sign-On (SSO)</strong><br>
+                        <small>Une seule connexion pour tout</small>
+                    </div>
+                    <div class="col-md-4">
+                        <i class="bi bi-stars"></i>
+                        <strong>IA Souveraine</strong><br>
+                        <small>LLMs Français - Hébergement France</small>
+                    </div>
+                </div>
+                <hr style="border-color: rgba(255,255,255,0.3); margin: 2rem 0;">
+                <p class="mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Portail développé pour la DRASI - Direction Régionale Académique au Système d'Information
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Rendre toute la carte cliquable
+        document.querySelectorAll('.app-card').forEach(card => {
+            card.addEventListener('click', function(e) {
+                // Ne pas déclencher si on clique sur le bouton lui-même
+                if (!e.target.closest('.btn-access')) {
+                    const link = this.querySelector('.btn-access');
+                    if (link) {
+                        // Effet visuel
+                        link.classList.add('pulse');
+                        setTimeout(() => {
+                            window.location.href = link.href;
+                        }, 200);
+                    }
+                }
+            });
+        });
+
+        // Animation au scroll (optionnel)
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.app-card').forEach(card => {
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html>
