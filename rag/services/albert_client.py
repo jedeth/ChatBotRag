@@ -81,6 +81,84 @@ class AlbertClient:
         return all_embeddings
 
     # ------------------------------------------------------------------
+    # Re-ranking
+    # ------------------------------------------------------------------
+
+    def rerank(self, query: str, documents: List[str], top_k: int = 5) -> List[dict]:
+        """
+        Re-classe des documents selon leur pertinence avec la requête.
+
+        Utilise le modèle BAAI/bge-reranker-v2-m3 pour affiner le classement
+        des chunks retournés par la recherche vectorielle initiale.
+
+        Args:
+            query: Question de l'utilisateur
+            documents: Liste de textes (chunks) à re-classer
+            top_k: Nombre de documents les plus pertinents à retourner (défaut: 5)
+
+        Returns:
+            Liste de dicts [{"index": int, "score": float}, ...] triée par score décroissant
+            - index: position du document dans la liste initiale
+            - score: score de pertinence (plus élevé = plus pertinent)
+
+        Raises:
+            Exception: En cas d'erreur API
+        """
+        if not documents:
+            return []
+
+        logger.info(f"Re-ranking {len(documents)} documents avec bge-reranker-v2-m3")
+
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                response = client.post(
+                    f"{self.api_url}/rerank",
+                    headers=self.headers,
+                    json={
+                        "model": "BAAI/bge-reranker-v2-m3",
+                        "query": query,
+                        "documents": documents,
+                        "top_k": top_k
+                    }
+                )
+
+                if response.status_code != 200:
+                    logger.error(
+                        f"Erreur API Albert rerank : HTTP {response.status_code} — {response.text}"
+                    )
+                    raise Exception(f"API Albert rerank : HTTP {response.status_code}")
+
+                data = response.json()
+
+                # Format de réponse Albert API: {"results": [{"index": 0, "relevance_score": 0.95}, ...]}
+                results = data.get('results', [])
+
+                # Normaliser le format (score peut être relevance_score ou score selon l'API)
+                normalized_results = [
+                    {
+                        "index": item["index"],
+                        "score": item.get("relevance_score", item.get("score", 0.0))
+                    }
+                    for item in results
+                ]
+
+                if normalized_results:
+                    logger.info(
+                        f"Re-ranking terminé : {len(normalized_results)}/{len(documents)} documents "
+                        f"(score max: {normalized_results[0]['score']:.3f})"
+                    )
+                else:
+                    logger.warning("Re-ranking : aucun résultat retourné")
+
+                return normalized_results
+
+        except Exception as e:
+            logger.error(f"Erreur re-ranking : {e}")
+            # Fallback: retourner les indices dans l'ordre original avec score 1.0
+            logger.warning("Fallback : utilisation de l'ordre original sans re-ranking")
+            return [{"index": i, "score": 1.0} for i in range(min(top_k, len(documents)))]
+
+    # ------------------------------------------------------------------
     # Génération de texte
     # ------------------------------------------------------------------
 

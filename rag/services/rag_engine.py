@@ -24,12 +24,16 @@ from ..models import Document, DocumentChunk
 
 logger = logging.getLogger('rag')
 
-# Nombre de chunks à récupérer par requête
-TOP_K = 5
+# Paramètres de recherche vectorielle
+SIMILARITY_THRESHOLD = 0.8  # Seuil de distance cosinus (0 = identique, 1 = orthogonal)
 
-# Seuil de distance cosinus (0 = identique, 1 = orthogonal).
-# On rejette les résultats au-delà de ce seuil.
-SIMILARITY_THRESHOLD = 0.8
+# Paramètres de re-ranking (si activé)
+ENABLE_RERANKING = True    # Active le re-ranking avec bge-reranker-v2-m3
+INITIAL_TOP_K = 20         # Nombre de chunks récupérés avant re-ranking
+FINAL_TOP_K = 5            # Nombre de chunks finaux après re-ranking
+
+# Si re-ranking désactivé, récupère directement FINAL_TOP_K chunks
+TOP_K = FINAL_TOP_K
 
 
 class RAGEngine:
@@ -212,11 +216,19 @@ class RAGEngine:
         """
         Recherche les chunks les plus proches de la requête via pgvector.
 
-        Utilise l'index HNSW sur l'embedding et filtre par distance cosinus.
+        Pipeline en 2 étapes (si re-ranking activé) :
+          1. Récupération large : TOP 20 chunks via similarité cosinus (pgvector)
+          2. Re-ranking : bge-reranker-v2-m3 sélectionne les 5 meilleurs
+
+        Si re-ranking désactivé, récupère directement les 5 meilleurs chunks.
+
         Seuls les documents appartenant à l'utilisateur sont interrogés.
         """
         # Embed la requête
         query_embedding = self.albert.generate_embeddings([query])[0]
+
+        # Déterminer combien de chunks récupérer
+        retrieve_k = INITIAL_TOP_K if ENABLE_RERANKING else FINAL_TOP_K
 
         # Requête pgvector — select_related pour éviter une requête supplémentaire
         # sur document.filename
@@ -227,21 +239,61 @@ class RAGEngine:
             .annotate(distance=CosineDistance('embedding', query_embedding))
             .filter(distance__lte=SIMILARITY_THRESHOLD)
             .order_by('distance')
-            [:TOP_K]
+            [:retrieve_k]
         )
 
-        results = [
+        # Convertir en liste avec filtrage des chunks vides
+        initial_results = [
             {
                 'content':  chunk.content,
                 'source':   chunk.document.filename,
                 'distance': float(chunk.distance),
             }
             for chunk in chunks_qs
-            if len(chunk.content.strip()) >= 50  # Filtrer les chunks vides
+            if len(chunk.content.strip()) >= 50
         ]
 
-        logger.info(f"Récupéré {len(results)} chunks pertinents")
-        return results
+        logger.info(f"Récupéré {len(initial_results)} chunks via pgvector (similarité cosinus)")
+
+        # Si re-ranking activé et qu'on a des résultats, re-classer avec bge-reranker-v2-m3
+        if ENABLE_RERANKING and initial_results:
+            try:
+                # Extraire les contenus pour le re-ranking
+                documents = [chunk['content'] for chunk in initial_results]
+
+                # Appeler le re-ranker
+                rerank_results = self.albert.rerank(
+                    query=query,
+                    documents=documents,
+                    top_k=FINAL_TOP_K
+                )
+
+                # Reconstruire les résultats avec les chunks re-classés
+                reranked_chunks = []
+                for item in rerank_results:
+                    original_chunk = initial_results[item['index']]
+                    reranked_chunks.append({
+                        'content': original_chunk['content'],
+                        'source': original_chunk['source'],
+                        'distance': 1.0 - item['score'],  # Convertir score → distance
+                        'rerank_score': item['score']     # Conserver score original
+                    })
+
+                logger.info(
+                    f"Re-ranking terminé : {len(reranked_chunks)} chunks finaux "
+                    f"(score max: {rerank_results[0]['score']:.3f})"
+                    if rerank_results else "Re-ranking : aucun résultat"
+                )
+
+                return reranked_chunks
+
+            except Exception as e:
+                logger.warning(f"Échec re-ranking, utilisation des résultats initiaux : {e}")
+                # Fallback : retourner les premiers FINAL_TOP_K chunks sans re-ranking
+                return initial_results[:FINAL_TOP_K]
+
+        # Si re-ranking désactivé, retourner les résultats directs
+        return initial_results
 
     # ------------------------------------------------------------------
     # Construction du prompt
