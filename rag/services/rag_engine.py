@@ -2,25 +2,28 @@
 Moteur RAG (Retrieval-Augmented Generation).
 
 Pipeline par requête :
+  0. [OPTIONNEL] Analyse de la question avec Query Coach
   1. Embed la question via Albert  →  vecteur 1024 dims
   2. Recherche de similarité cosinus dans pgvector  →  top-k chunks
-  3. Construction du prompt avec le contexte récupéré
-  4. Génération de la réponse via Albert chat/completions
-  5. Extraction + déduplication des sources citées
+  3. Re-ranking avec bge-reranker-v2-m3 (si activé)
+  4. Construction du prompt avec le contexte récupéré
+  5. Génération de la réponse via Albert chat/completions
+  6. Extraction + déduplication des sources citées
 
-Porté depuis chatbot/services/rag_engine.py :
-  - ChromaDB remplacé par une requête Django ORM + pgvector
-  - La persistance des conversations (ex-TODO) est désormais triviale
-    via les modèles Conversation / Message
+Query Coach (Phase 4):
+  - Détection automatique du niveau utilisateur (novice/intermédiaire/expert)
+  - Coaching adaptatif non-intrusif
+  - Skip automatique pour questions expertes
 """
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from django.contrib.auth.models import User
 from django.conf import settings
 from pgvector.django import CosineDistance
 
 from .albert_client import AlbertClient
+from .query_coach import QueryCoach, QueryAnalysis
 from ..models import Document, DocumentChunk
 
 logger = logging.getLogger('rag')
@@ -38,6 +41,51 @@ class RAGEngine:
 
     def __init__(self):
         self.albert = AlbertClient()
+        self.coach = QueryCoach()
+
+    # ------------------------------------------------------------------
+    # Query Coach (Phase 4)
+    # ------------------------------------------------------------------
+
+    def analyze_query(self, query: str) -> QueryAnalysis:
+        """
+        Analyse une question avec le Query Coach.
+
+        Détecte le niveau de l'utilisateur et identifie les améliorations possibles.
+
+        Args:
+            query: Question à analyser
+
+        Returns:
+            QueryAnalysis avec niveau et suggestions
+        """
+        return self.coach.analyze_query(query)
+
+    def get_coaching_suggestions(self, query: str) -> Optional[Dict]:
+        """
+        Obtient les suggestions de coaching pour une question.
+
+        Args:
+            query: Question à analyser
+
+        Returns:
+            Dict avec message et suggestions, ou None si pas de coaching nécessaire
+        """
+        analysis = self.coach.analyze_query(query)
+
+        if not analysis.needs_coaching:
+            logger.info(f"Query Coach: Niveau '{analysis.level}' (score: {analysis.score:.2f}) - Pas de coaching nécessaire")
+            return None
+
+        coaching_message = self.coach.generate_coaching_message(analysis, query)
+
+        if coaching_message:
+            logger.info(
+                f"Query Coach: Niveau '{analysis.level}' (score: {analysis.score:.2f}) - "
+                f"Coaching proposé ({len(coaching_message.get('suggestions', []))} suggestions)"
+            )
+
+        return coaching_message
 
     # ------------------------------------------------------------------
     # Point d'entrée principal
@@ -49,14 +97,42 @@ class RAGEngine:
         message: str,
         temperature: float = 0.7,
         max_tokens: int = 500,
+        skip_coaching: bool = False,
     ) -> Dict:
         """
         Génère une réponse RAG pour un utilisateur.
 
+        Args:
+            user: Utilisateur Django
+            message: Question de l'utilisateur
+            temperature: Paramètre de créativité (0-1)
+            max_tokens: Longueur maximale de la réponse
+            skip_coaching: Si True, skip l'analyse par le Query Coach
+
         Returns:
-            {"response": "texte", "sources": [{…}, …]}
+            {
+                "response": "texte",
+                "sources": [{…}, …],
+                "coaching": {...} (optionnel, si suggestions disponibles)
+            }
         """
         logger.info(f"RAG query pour {user.username} : {message[:60]}…")
+
+        # Phase 4: Analyse avec Query Coach (si non-skippé)
+        coaching_result = None
+        if not skip_coaching:
+            analysis = self.coach.analyze_query(message)
+            logger.info(
+                f"Query Coach: Niveau '{analysis.level}' (score: {analysis.score:.2f})"
+            )
+
+            # Générer suggestions si nécessaire (mais ne pas bloquer la requête)
+            if analysis.needs_coaching:
+                coaching_result = self.coach.generate_coaching_message(analysis, message)
+                if coaching_result:
+                    logger.info(
+                        f"Query Coach: {len(coaching_result.get('suggestions', []))} suggestions générées"
+                    )
 
         # 0. Vérifier si la question concerne des statistiques de documents
         metadata_response = self._try_metadata_response(user, message)
@@ -80,10 +156,17 @@ class RAGEngine:
         # 4. Sources
         sources = self._extract_sources(context_chunks)
 
-        return {
+        # Construire la réponse
+        result = {
             'response': response_text,
             'sources': sources,
         }
+
+        # Ajouter les suggestions de coaching si disponibles
+        if coaching_result:
+            result['coaching'] = coaching_result
+
+        return result
 
     # ------------------------------------------------------------------
     # Consultation des métadonnées (pour questions statistiques)
