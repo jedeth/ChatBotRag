@@ -22,7 +22,8 @@ pysaml2==7.5.4
 xmlsec>=1.0.0
 
 # --- Extraction de documents (porté depuis chatbot/) ---
-PyMuPDF>=1.23.8          # PDF
+PyMuPDF>=1.23.8          # PDF (texte)
+pdfplumber>=0.11.0       # PDF (tableaux)
 python-docx>=1.1.0       # DOCX
 openpyxl>=3.1.2          # XLSX
 langchain-text-splitters>=0.0.1  # Découpage en chunks

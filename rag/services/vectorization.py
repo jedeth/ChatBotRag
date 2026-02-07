@@ -17,6 +17,7 @@ import logging
 from typing import List, Dict
 
 import fitz  # PyMuPDF
+import pdfplumber  # Extraction de tableaux PDF
 from docx import Document as DocxDocument
 import openpyxl
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -77,21 +78,110 @@ class VectorizationService:
             raise
 
     def _extract_pdf(self, file_path: str) -> str:
-        """PDF → texte avec numéros de page (PyMuPDF)."""
-        doc = fitz.open(file_path)
-        pages = []
-        for page_num, page in enumerate(doc, start=1):
-            pages.append(f"\n\n--- Page {page_num} ---\n\n{page.get_text()}")
+        """
+        PDF → texte avec tableaux (PyMuPDF + pdfplumber).
 
-        # Stocker les métadonnées PDF
+        Stratégie:
+        - PyMuPDF pour le texte général (rapide, fiable)
+        - pdfplumber pour détecter et extraire les tableaux (précis pour tableaux)
+        - Fusion intelligente : texte + tableaux formatés
+        """
+        # 1. Extraction texte avec PyMuPDF
+        doc_fitz = fitz.open(file_path)
+        pages_content = []
+        table_count = 0
+
+        # 2. Extraction tableaux avec pdfplumber
+        with pdfplumber.open(file_path) as pdf_plumber:
+            for page_num, (page_fitz, page_plumber) in enumerate(
+                zip(doc_fitz, pdf_plumber.pages), start=1
+            ):
+                page_text = f"\n\n--- Page {page_num} ---\n\n"
+
+                # Texte de la page (PyMuPDF)
+                text_content = page_fitz.get_text()
+
+                # Tableaux de la page (pdfplumber)
+                tables = page_plumber.extract_tables()
+
+                if tables:
+                    # Si la page contient des tableaux, les formater proprement
+                    page_text += f"📊 Cette page contient {len(tables)} tableau(x)\n\n"
+                    page_text += text_content
+
+                    # Ajouter chaque tableau formaté
+                    for table_idx, table in enumerate(tables, start=1):
+                        table_count += 1
+                        page_text += f"\n\n=== TABLEAU {table_idx} (Page {page_num}) ===\n"
+                        page_text += self._format_table(table)
+                        page_text += "\n=== FIN TABLEAU ===\n\n"
+                else:
+                    # Pas de tableau, juste le texte
+                    page_text += text_content
+
+                pages_content.append(page_text)
+
+        # 3. Stocker les métadonnées PDF
         self.extracted_metadata.update({
-            'page_count': len(doc),
-            'has_toc': len(doc.get_toc()) > 0
+            'page_count': len(doc_fitz),
+            'has_toc': len(doc_fitz.get_toc()) > 0,
+            'has_tables': table_count > 0,
+            'table_count': table_count
         })
-        logger.info(f"PDF metadata: {len(doc)} page(s)")
+        logger.info(
+            f"PDF metadata: {len(doc_fitz)} page(s), {table_count} tableau(x) extrait(s)"
+        )
 
-        doc.close()
-        return "".join(pages)
+        doc_fitz.close()
+        return "".join(pages_content)
+
+    def _format_table(self, table: List[List]) -> str:
+        """
+        Formate un tableau extrait par pdfplumber en texte lisible.
+
+        Args:
+            table: Liste de listes (lignes × colonnes)
+
+        Returns:
+            Tableau formaté en texte avec séparateurs
+        """
+        if not table or len(table) == 0:
+            return "(Tableau vide)"
+
+        # Nettoyer les cellules vides (None → "")
+        cleaned_table = [
+            [str(cell).strip() if cell else "" for cell in row]
+            for row in table
+        ]
+
+        # Calculer la largeur maximale de chaque colonne
+        col_widths = []
+        if cleaned_table:
+            num_cols = max(len(row) for row in cleaned_table)
+            for col_idx in range(num_cols):
+                max_width = max(
+                    len(row[col_idx]) if col_idx < len(row) else 0
+                    for row in cleaned_table
+                )
+                col_widths.append(min(max_width, 40))  # Max 40 chars par colonne
+
+        # Formater chaque ligne
+        formatted_rows = []
+        for row_idx, row in enumerate(cleaned_table):
+            formatted_cells = []
+            for col_idx, cell in enumerate(row):
+                width = col_widths[col_idx] if col_idx < len(col_widths) else 20
+                # Tronquer si trop long
+                cell_text = cell[:width].ljust(width)
+                formatted_cells.append(cell_text)
+            formatted_rows.append(" | ".join(formatted_cells))
+
+            # Ligne de séparation après l'en-tête (première ligne)
+            if row_idx == 0 and len(cleaned_table) > 1:
+                separator = "-+-".join(["-" * w for w in col_widths[:len(row)]])
+                formatted_rows.append(separator)
+
+        return "\n".join(formatted_rows)
 
     def _extract_docx(self, file_path: str) -> str:
         """DOCX → texte paragraphe par paragraphe."""
