@@ -60,13 +60,13 @@
                                         {{ doc.get_status_display }}
                                     </span>
 
-                                    <!-- Barre de progression si vectorisation en cours -->
+                                    <!-- Message simple si vectorisation en cours -->
                                     {% if doc.status == 'vectorizing' %}
-                                    <div class="progress mt-1" style="height: 6px;"
-                                         id="doc-progress-bar-{{ doc.id }}">
-                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
-                                             style="width: 10%"
-                                             id="doc-progress-{{ doc.id }}"></div>
+                                    <div class="mt-1" id="doc-progress-msg-{{ doc.id }}">
+                                        <small class="text-info">
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            Vectorisation en cours...
+                                        </small>
                                     </div>
                                     {% endif %}
 
@@ -147,25 +147,29 @@
             const data = await resp.json();
 
             if (data.status === 'success') {
+                // Mise à jour du statut
                 document.getElementById('doc-status-' + docId).textContent = 'Vectorisé';
                 document.getElementById('doc-status-' + docId).className = 'badge badge-vectorized';
-                const bar = document.getElementById('doc-progress-bar-' + docId);
-                if (bar) bar.style.display = 'none';
+
+                // Masquer le message "Vectorisation en cours..."
+                const msg = document.getElementById('doc-progress-msg-' + docId);
+                if (msg) msg.style.display = 'none';
+
                 return; // arrêt du polling
 
             } else if (data.status === 'failure') {
                 document.getElementById('doc-status-' + docId).textContent = 'Échec';
                 document.getElementById('doc-status-' + docId).className = 'badge badge-failed';
-                const bar = document.getElementById('doc-progress-bar-' + docId);
-                if (bar) bar.style.display = 'none';
-                return;
 
-            } else if (data.status === 'progress') {
-                const prog = document.getElementById('doc-progress-' + docId);
-                if (prog) prog.style.width = data.progress + '%';
+                // Masquer le message
+                const msg = document.getElementById('doc-progress-msg-' + docId);
+                if (msg) msg.style.display = 'none';
+
+                return;
             }
 
-            setTimeout(poll, 3000); // polling toutes les 3 secondes
+            // Continue polling (pas besoin de gérer les états intermédiaires)
+            setTimeout(poll, 2000); // polling toutes les 2 secondes
         } catch (e) {
             setTimeout(poll, 5000);
         }
